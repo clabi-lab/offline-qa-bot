@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline QA Bot</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar" aria-label="Offline QA Bot settings">
+        <section class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span>Q</span>
+          </div>
+          <div class="brand-copy">
+            <h1>Offline QA Bot</h1>
+          </div>
+          <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="좌측 패널 접기" aria-expanded="true">
+            <span aria-hidden="true"></span>
+          </button>
+        </section>
+
+        <section class="control-panel conversation-panel" aria-labelledby="conversation-heading">
+          <div class="panel-heading">
+            <h2 id="conversation-heading">Conversation</h2>
+          </div>
+          <button class="ghost-button new-chat-btn" id="new-chat" type="button">+ 새 대화</button>
+          <input
+            class="conversation-search"
+            id="conversation-search"
+            type="search"
+            placeholder="대화 검색"
+            spellcheck="false"
+            aria-label="대화 검색"
+          />
+          <div class="conversation-list" id="conversation-list" role="listbox" aria-label="대화 목록"></div>
+          <button class="text-button clear-all-btn" id="clear-all" type="button">전체 대화 지우기</button>
+        </section>
+
+        <details class="control-panel collapsible memory-panel" data-panel="memory" aria-labelledby="memory-heading" open>
+          <summary class="panel-summary"><h2 id="memory-heading">Memory</h2></summary>
+          <select class="preset-select memory-select" id="memory-select" aria-label="개인 메모리 프로파일"></select>
+          <button class="text-button" id="memory-edit" type="button">메모리 편집</button>
+        </details>
+
+        <details class="control-panel collapsible" data-panel="model" aria-labelledby="model-heading">
+          <summary class="panel-summary"><h2 id="model-heading">Model</h2></summary>
+          <div class="model-list" id="model-list" role="radiogroup" aria-label="Model selection"></div>
+          <button class="text-button add-model-btn" id="add-model" type="button">+ 모델 추가</button>
+          <div class="gen-divider">Generation Option</div>
+          <label class="toggle-row">
+            <input id="include-history" type="checkbox" checked />
+            <span>이전 대화 포함 (끄면 현재 메시지만 전송)</span>
+          </label>
+          <label class="toggle-row">
+            <input id="stream-toggle" type="checkbox" checked />
+            <span>스트리밍 응답 (토큰 단위 출력, 미지원 시 자동 폴백)</span>
+          </label>
+        </details>
+
+      </aside>
+
+      <section class="chat">
+        <header class="chat-header">
+          <div class="chat-header-left">
+            <button class="chat-menu" id="chat-menu" type="button" aria-label="설정 패널 열기">
+              <span aria-hidden="true"></span>
+            </button>
+            <div>
+              <p class="eyebrow">Internal Chat</p>
+              <h2 id="active-chat-title">새 대화</h2>
+            </div>
+          </div>
+          <div class="header-metrics">
+            <div class="context-donut" id="context-state" role="img" aria-label="맥락·토큰 사용량" tabindex="0">
+              <svg class="donut-svg" viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="donut-track" cx="18" cy="18" r="15"></circle>
+                <circle class="donut-arc" id="context-arc" cx="18" cy="18" r="15"></circle>
+              </svg>
+              <span class="donut-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="currentColor">
+                  <rect x="3" y="4.2" width="10" height="1.5" rx="0.75"></rect>
+                  <rect x="3" y="7.4" width="10" height="1.5" rx="0.75"></rect>
+                  <rect x="3" y="10.6" width="6" height="1.5" rx="0.75"></rect>
+                </svg>
+              </span>
+            </div>
+            <div class="connection-state" id="connection-state">준비됨</div>
+            <div class="header-menu-wrap">
+              <button class="header-pill header-menu-btn" id="header-menu-btn" type="button" aria-haspopup="true" aria-expanded="false">도구 <span class="caret" aria-hidden="true"></span></button>
+              <div class="popover-menu header-menu" id="header-menu" hidden>
+                <button class="popover-item" id="attach-library" type="button">첨부 보관함</button>
+                <button class="popover-item" id="shortcuts-help" type="button">단축키</button>
+                <button class="popover-item" id="check-connection" type="button">연결 확인</button>
+                <button class="popover-item" id="copy-curl" type="button">cURL 복사</button>
+                <button class="popover-item" id="copy-markdown" type="button">대화 복사(MD)</button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite"></div>
+
+        <div class="summary-banner" id="summary-banner" role="status" hidden>
+          <span class="summary-banner-text">대화가 많이 누적되었습니다. 오래된 내용을 요약 1건으로 압축할까요? (원문은 보관함에 보존됩니다)</span>
+          <div class="summary-banner-actions">
+            <button class="ghost-button compact" id="summary-run" type="button">대화 압축하기</button>
+            <button class="text-button" id="summary-dismiss" type="button">나중에</button>
+          </div>
+        </div>
+
+        <form class="composer" id="composer">
+          <div class="attachment-bar" aria-label="텍스트 파일 첨부">
+            <div class="attachment-actions">
+              <button class="ghost-button compact" id="attach-file" type="button">파일 첨부</button>
+              <button class="ghost-button compact" id="clear-attachments" type="button" disabled>첨부 비우기</button>
+              <span class="attachment-status" id="attachment-status">첨부 없음</span>
+            </div>
+            <input
+              class="sr-only"
+              id="file-input"
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.py,.js,.ts,.tsx,.jsx,.json,.yaml,.yml,.toml,.ini,.cfg,.conf,.env,.sh,.bash,.zsh,.sql,.log,.csv,.xml,.html,.css,.gitignore,.dockerignore,.editorconfig,.gitattributes,Dockerfile,Makefile,Jenkinsfile,Procfile,text/*,application/json"
+            />
+            <div class="attachment-list" id="attachment-list" aria-live="polite"></div>
+          </div>
+          <label class="sr-only" for="prompt">질문 입력</label>
+          <textarea
+            id="prompt"
+            name="prompt"
+            rows="1"
+            autocomplete="off"
+            placeholder="질문을 입력하세요. Shift+Enter로 줄바꿈"
+          ></textarea>
+          <div class="composer-actions">
+            <button class="memory-toggle is-on" id="memory-toggle" type="button" aria-pressed="true" title="개인 메모리 주입: 켜짐 (클릭해 끄기)">
+              <span class="memory-toggle-dot" aria-hidden="true"></span>
+              <span class="memory-toggle-label" id="memory-toggle-label">메모리</span>
+            </button>
+            <button class="send-button" id="send" type="submit" aria-label="전송">
+              <span class="send-label" id="send-label">전송</span>
+            </button>
+          </div>
+        </form>
+      </section>
+      <div id="sidebar-backdrop" aria-hidden="true"></div>
+    </main>
+
+    <div class="modal" id="shortcuts-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="키보드 단축키">
+        <div class="modal-head">
+          <h2>키보드 단축키</h2>
+          <button class="text-button" id="shortcuts-close" type="button">닫기</button>
+        </div>
+        <ul class="shortcut-list">
+          <li><span class="keys"><kbd>Enter</kbd></span><span>전송</span></li>
+          <li><span class="keys"><kbd>Shift</kbd>+<kbd>Enter</kbd></span><span>줄바꿈</span></li>
+          <li><span class="keys"><kbd>Ctrl/⌘</kbd>+<kbd>K</kbd></span><span>새 대화</span></li>
+          <li><span class="keys"><kbd>Esc</kbd></span><span>입력 비우기 · 패널/도움말 닫기</span></li>
+          <li><span class="keys"><kbd>?</kbd></span><span>이 도움말 열기</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modal" id="rename-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="대화 이름 바꾸기">
+        <div class="modal-head">
+          <h2>대화 이름 바꾸기</h2>
+          <button class="text-button" id="rename-close" type="button">닫기</button>
+        </div>
+        <input class="rename-input" id="rename-input" type="text" spellcheck="false" aria-label="대화 이름" />
+        <div class="panel-actions">
+          <button class="text-button" id="rename-cancel" type="button">취소</button>
+          <button class="ghost-button compact" id="rename-confirm" type="button">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="model-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="모델 설정">
+        <div class="modal-head">
+          <h2>모델 설정</h2>
+          <button class="text-button" id="model-close" type="button">닫기</button>
+        </div>
+        <p class="memory-hint">수정 즉시 영구 저장됩니다. (모델 단위 · 모든 대화 공통)</p>
+        <label class="memory-field-label" for="model-label-input">이름</label>
+        <input class="rename-input" id="model-label-input" type="text" spellcheck="false" aria-label="모델 이름" />
+        <label class="memory-field-label" for="model-endpoint-input">Endpoint URL</label>
+        <input class="rename-input" id="model-endpoint-input" type="url" spellcheck="false" placeholder="http://localhost:8000/v1/chat/completions" />
+        <label class="memory-field-label" for="model-body-input">Body model</label>
+        <input class="rename-input" id="model-body-input" type="text" spellcheck="false" placeholder="예) gemma-4-26B-it" />
+        <div class="panel-actions">
+          <button class="text-button danger" id="model-delete" type="button">이 모델 삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="memory-modal" hidden>
+      <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-label="개인 메모리">
+        <div class="modal-head">
+          <h2>개인 메모리</h2>
+          <button class="text-button" id="memory-close" type="button">닫기</button>
+        </div>
+        <p class="memory-hint">프로파일 하나가 <b>지침(행동·역할)</b> + <b>기억할 정보(사실·맥락)</b>를 함께 담습니다. 상황별로 골라 쓰세요. 지침은 항상 적용되고, 기억할 정보는 아래 토글이 켜졌을 때만 주입됩니다.</p>
+        <label class="toggle-row memory-on-row">
+          <input id="memory-on" type="checkbox" checked />
+          <span>이 대화에 기억할 정보 주입 (전송 버튼 옆 토글과 연동)</span>
+        </label>
+        <div class="memory-profile-row">
+          <select class="preset-select" id="memory-profile-select" aria-label="메모리 프로파일 선택"></select>
+          <button class="text-button" id="memory-add-profile" type="button">+ 프로파일</button>
+          <button class="text-button" id="memory-delete-profile" type="button">삭제</button>
+        </div>
+        <label class="memory-field-label" for="memory-profile-label">프로파일 이름</label>
+        <input class="rename-input" id="memory-profile-label" type="text" spellcheck="false" aria-label="프로파일 이름" />
+        <label class="memory-field-label" for="memory-instructions">지침 (행동·역할 — 시스템 프롬프트)</label>
+        <textarea
+          id="memory-instructions"
+          class="system-prompt-textarea"
+          rows="6"
+          spellcheck="false"
+          placeholder="예) 당신은 유능한 코딩 어시스턴트입니다. 항상 한국어로 명확히 답하세요…"
+        ></textarea>
+        <label class="memory-field-label" for="memory-profile-text">기억할 정보 (이 프로파일의 사실·맥락)</label>
+        <textarea
+          id="memory-profile-text"
+          class="system-prompt-textarea"
+          rows="5"
+          spellcheck="false"
+          placeholder="예) 나는 사내 온프레미스 환경에서 일한다. 인프라는 Kubernetes를 쓴다."
+        ></textarea>
+        <label class="memory-field-label" for="memory-conversation">이 대화 메모리 (현재 대화에만)</label>
+        <textarea
+          id="memory-conversation"
+          class="system-prompt-textarea"
+          rows="4"
+          spellcheck="false"
+          placeholder="이 대화에만 적용할 메모."
+        ></textarea>
+        <div class="panel-actions">
+          <button class="text-button" id="memory-export" type="button">이 프로파일 내보내기(.md)</button>
+          <button class="text-button" id="memory-import" type="button">.md 가져오기(여러 개)</button>
+          <input class="sr-only" id="memory-import-input" type="file" multiple accept=".md,.markdown,.txt,text/markdown,text/plain" />
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="library-modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="첨부 보관함">
+        <div class="modal-head">
+          <h2>첨부 보관함</h2>
+          <button class="text-button" id="library-close" type="button">닫기</button>
+        </div>
+        <input class="library-search" id="library-search" type="search" placeholder="파일명 검색" spellcheck="false" aria-label="첨부 파일명 검색" />
+        <div class="library-list" id="library-list"></div>
+      </div>
+    </div>
+  </body>
+</html>
