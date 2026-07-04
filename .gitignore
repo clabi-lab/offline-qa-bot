@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 ._*
 *.log
+
+# 로컬 에디터/프리뷰 설정
+.claude/

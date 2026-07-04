@@ -455,6 +455,11 @@ textarea:focus {
   padding: 22px 30px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+  /* 헤더는 backdrop-filter로 자체 stacking context를 만들지만 static이라, 대화가 쌓이면
+     뒤(DOM상 뒤) 메시지 버블이 같은 레벨에서 위로 그려져 아래로 펼쳐지는 '도구' 팝오버를
+     덮어 클릭을 가로챈다. position+z-index로 헤더를 버블 위(모달/드로어보다는 아래)에 둔다. */
+  position: relative;
+  z-index: 30;
 }
 
 .chat-header-left {
@@ -523,14 +528,86 @@ textarea:focus {
   color: var(--danger);
 }
 
+/* .messages 를 감싸 플로팅 '맨 아래로' 버튼의 위치 기준(relative)이 된다. .chat grid 의 1fr 행. */
+.messages-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .messages {
   display: flex;
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
+  flex: 1;
   /* 1fr 행 안에서 스스로 축소 가능해야 overflow-y 가 실제 스크롤로 동작(아니면 내용만큼 커짐). */
   min-height: 0;
   padding: 30px;
+}
+
+/* '맨 아래로' 플로팅 버튼 — 바닥에서 멀어졌을 때만 노출(일반적인 챗 UI 식 하단 중앙 배치).
+   스트리밍 중 새 내용이 쌓이면 라벨로 알린다. */
+.scroll-bottom-btn {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  box-shadow: var(--glass-shadow);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.scroll-bottom-btn[hidden] {
+  display: none;
+}
+
+.scroll-bottom-btn:hover {
+  background: var(--glass);
+}
+
+.scroll-bottom-arrow {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.scroll-bottom-label:empty {
+  display: none;
+}
+
+.scroll-bottom-btn.has-new {
+  border-color: var(--accent-ink, #1a7f5a);
+  color: var(--accent-ink, #1a7f5a);
+}
+
+/* 아주 넓은 모니터(4K·울트라와이드)에서만 콘텐츠 밴드 폭을 제한해 가운데 빈 공간을 줄인다.
+   버블은 그대로 좌/우 엣지 정렬(중앙 컬럼 아님) — 밴드만 좁아지고 입력창도 같은 밴드로 정렬한다.
+   1600px 미만은 전혀 영향 없음. */
+@media (min-width: 1600px) {
+  .messages {
+    width: 100%;
+    max-width: 1400px;
+    margin-inline: auto;
+  }
+  .composer {
+    /* 바(배경·상단선)는 전폭 유지, 내용만 메시지 밴드에 맞춰 안쪽 여백 확대. */
+    padding-inline: calc((100% - 1400px) / 2 + 30px);
+  }
 }
 
 .empty-state {
@@ -545,14 +622,44 @@ textarea:focus {
   display: block;
   margin-bottom: 8px;
   color: var(--black);
-  font-size: 30px;
+  font-size: 26px;
   letter-spacing: 0;
+}
+
+.empty-state > span {
+  max-width: 460px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.empty-endpoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: center;
+  max-width: 90%;
+  margin-top: 18px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.empty-endpoint-url {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message {
   display: grid;
   gap: 8px;
   max-width: min(900px, 92%);
+  /* min-width:0 이 없으면 grid/flex 자식이 내용 최소폭(긴 코드 한 줄 등) 아래로 못 줄어,
+     버블이 뷰포트보다 넓어지며 우측이 잘린다(코드 복사 버튼·표가 화면 밖으로). */
+  min-width: 0;
   animation: enter 160ms ease both;
 }
 
@@ -588,6 +695,8 @@ textarea:focus {
   overflow-wrap: break-word;
   word-break: keep-all;
   line-break: strict;
+  /* 내부 코드/표가 가로로 길어도 버블이 트랙 폭을 넘지 않게(자식의 overflow 스크롤이 동작). */
+  min-width: 0;
 }
 
 .user .bubble {
@@ -710,11 +819,16 @@ textarea:focus {
 }
 
 .markdown-table-wrap {
+  position: relative; /* ‹ › 버튼(절대배치)의 기준. 가로 스크롤은 내부 .markdown-table-scroll */
   max-width: 100%;
-  overflow-x: auto;
+  overflow: hidden; /* 둥근 모서리 클립 + 버튼 영역(콘텐츠 가로 스크롤은 내부에서) */
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.markdown-table-scroll {
+  overflow-x: auto;
 }
 
 .markdown-table {
@@ -731,6 +845,14 @@ textarea:focus {
   border-left: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
+  /* 셀 색을 명시: 색상 상속에 기대면 어두운 user 버블 안에서 흰 글자→흰 배경으로 안 보인다. */
+  background: var(--panel);
+  color: var(--ink);
+  /* 좁은 폭에서 셀이 글자 단위로 세로로 쪼개지는 것을 막는다: 한글은 어절 단위로만 줄바꿈(keep-all),
+     셀 최소폭을 확보해 넘치면 가로 스크롤(‹ ›)로 넘긴다. */
+  min-width: 88px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .markdown-table th:first-child,
@@ -760,8 +882,7 @@ textarea:focus {
 .code-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   min-height: 36px;
   padding: 8px 10px 8px 12px;
   border-bottom: 1px solid #3a3a3a;
@@ -775,6 +896,7 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
+  margin-right: auto; /* 언어 라벨은 왼쪽, 나머지 컨트롤(‹ ›·복사)은 오른쪽에 그룹 */
   padding: 2px 7px;
   border: 1px solid #3a3a3a;
   border-radius: 999px;
@@ -792,7 +914,7 @@ textarea:focus {
 
 .code-scroll::-webkit-scrollbar,
 .conversation-list::-webkit-scrollbar,
-.markdown-table-wrap::-webkit-scrollbar {
+.markdown-table-scroll::-webkit-scrollbar {
   height: 10px;
   width: 10px;
 }
@@ -808,12 +930,12 @@ textarea:focus {
 }
 
 .conversation-list::-webkit-scrollbar-track,
-.markdown-table-wrap::-webkit-scrollbar-track {
+.markdown-table-scroll::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
 .conversation-list::-webkit-scrollbar-thumb,
-.markdown-table-wrap::-webkit-scrollbar-thumb {
+.markdown-table-scroll::-webkit-scrollbar-thumb {
   background: #bdbdbd;
   border: 2px solid #f1f1f1;
   border-radius: 999px;
@@ -860,6 +982,47 @@ textarea:focus {
 
 .typing span:nth-child(3) {
   animation-delay: 240ms;
+}
+
+/* 스트리밍 생성 중 캐럿 — 마지막 렌더 콘텐츠 뒤에 깜빡이는 블록으로 '생성 중'을 표시. */
+.stream-caret {
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  opacity: 0.75;
+  border-radius: 1px;
+  animation: stream-caret-blink 1s steps(2, start) infinite;
+}
+
+/* 코드/표 블록만 있고 인라인 텍스트가 없을 때도 캐럿이 보이도록 최소 높이 확보 */
+.bubble > .stream-caret:only-child {
+  height: 1.1em;
+}
+
+@keyframes stream-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-caret {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* 추론(reasoning) 모델의 본문 전 '추론 중' 표시 */
+.reasoning-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
 }
 
 .composer {
@@ -1049,9 +1212,23 @@ textarea:focus {
 
 .content-heading {
   margin: 14px 0 0;
-  font-size: 15px;
   font-weight: 750;
   line-height: 1.4;
+}
+
+/* 마크다운 제목 레벨별 크기 차등(# → h3 … ####+ → h6). 동일 크기면 위계가 안 보인다. */
+h3.content-heading {
+  font-size: 21px;
+}
+h4.content-heading {
+  font-size: 18px;
+}
+h5.content-heading {
+  font-size: 16px;
+}
+h6.content-heading {
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .content-quote {
@@ -1059,6 +1236,11 @@ textarea:focus {
   padding: 4px 0 4px 12px;
   border-left: 3px solid var(--line);
   color: var(--muted);
+}
+
+.empty-response-placeholder {
+  color: var(--soft);
+  font-style: italic;
 }
 
 .bubble > .content-heading:first-child,
@@ -1663,43 +1845,76 @@ kbd {
   position: relative;
 }
 
-.code-scroll-btn {
-  position: absolute;
-  /* code-head(≈36px)를 제외한 본문 영역 중앙에 정렬(전체 블록 50%면 머리글 포함이라 위로 치우침) */
-  top: calc(50% + 18px);
-  transform: translateY(-50%);
-  z-index: 2;
+/* 가로 스크롤 ‹ › 컨트롤 — 코드블록·표 상단 툴바에 인라인 배치(콘텐츠 위에 겹치지 않음).
+   오버플로 시에만 노출하고, 블록이 길어도 상단이라 항상 도달 가능. */
+.hscroll-controls {
   display: none;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.has-overflow .hscroll-controls {
+  display: inline-flex;
+}
+
+.hscroll-btn {
+  display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
+  width: 26px;
+  height: 24px;
+  border-radius: 6px;
   border: 1px solid var(--glass-border);
   background: var(--glass-strong);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
-  box-shadow: var(--glass-shadow);
   color: var(--ink);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   padding: 0;
+  cursor: pointer;
 }
 
-.code-block.has-overflow .code-scroll-btn {
-  display: grid;
+.hscroll-btn:hover:not(:disabled) {
+  background: var(--glass);
 }
 
-.code-scroll-left {
-  left: 8px;
+/* 코드블록 툴바는 어두운 배경 → 밝은 컨트롤 */
+.code-head .hscroll-btn {
+  border-color: #3a3a3a;
+  background: #222222;
+  color: #e8e8e8;
 }
 
-.code-scroll-right {
-  right: 8px;
+.code-head .hscroll-btn:hover:not(:disabled) {
+  background: #2f2f2f;
 }
 
-.code-scroll-btn:disabled {
-  opacity: 0.28;
+.hscroll-btn:disabled {
+  opacity: 0.35;
   cursor: default;
+}
+
+/* 표 상단 툴바 — 오버플로 시에만 표시(평시엔 표에 군더더기 없음) */
+.table-head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f6f6;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.markdown-table-wrap.has-overflow .table-head {
+  display: flex;
+}
+
+.table-head-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ── 사이드바 아코디언 패널(Model/Endpoint/Generation/System) ── */
@@ -2049,7 +2264,8 @@ details.collapsible[open] > .panel-summary::after {
   flex-direction: column;
   min-width: 168px;
   padding: 6px;
-  background: var(--glass-strong);
+  /* 완전 불투명: 반투명이면 뒤의 어두운 버블 텍스트가 비쳐 메뉴 가독성이 떨어진다. */
+  background: #ffffff;
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid var(--glass-border);
@@ -2216,6 +2432,14 @@ details.collapsible[open] > .panel-summary::after {
   min-height: 240px;
   margin: 12px 0;
   resize: vertical;
+}
+
+/* 화면이 낮으면(노트북 768 등) 큰 텍스트영역 2개가 모달을 넘치게 한다 → 줄여서 카드 안에 맞춘다.
+   (모달은 max-height:88vh + 내부 스크롤이 이미 있어 잘리진 않지만, 줄이면 스크롤 없이 한눈에 본다.) */
+@media (max-height: 820px) {
+  .system-prompt-textarea {
+    min-height: 132px;
+  }
 }
 
 /* ── Generation 토글을 커스텀 스위치로 ── */
@@ -2598,6 +2822,11 @@ details.collapsible[open] > .panel-summary::after {
   color: var(--soft);
 }
 
+.field-hint {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 /* ── 모델 목록: 항목 + ⋯(설정) 버튼 ── */
 .model-row {
   display: flex;
@@ -2780,6 +3009,152 @@ details.collapsible[open] > .panel-summary::after {
 /* ── 성능: 화면 밖 메시지는 렌더 생략(긴 대화에서 레이아웃·페인트 비용↓) ──
    contain-intrinsic-size의 auto 키워드로 마지막 렌더 높이를 기억해 스크롤 점프를 줄인다. */
 .message {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
+  /* content-visibility:auto 는 화면 밖 메시지 페인트를 건너뛰지만, 스크롤이 도달할 때마다 실제
+     높이로 렌더돼 scrollHeight·isNearBottom 이 흔들린다 → '맨 아래로' 정확도·읽던 위치 보존이
+     깨져 사용자가 지적한 '스크롤 위치가 애매' 문제의 원인이 된다. 스크롤 정확도를 우선해 해제.
+     (대규모 대화 페인트 최적화는 별도 가상화 과제로 분리.) */
+  contain: layout style;
+}
+
+/* ── P0 반응형 수정 ─────────────────────────────────────────────── */
+
+/* 좁은 폭: 위 전역 .chat-header { flex-wrap: wrap }(pill 잘림 방지)이 640px 이하의
+   column 헤더와 만나면 wrap이 아래가 아니라 '오른쪽 새 컬럼'으로 넘겨 metrics가
+   뷰포트 밖으로 밀린다(가로 오버플로). column에서는 nowrap이어야 세로로 쌓인다.
+   소스 순서상 전역 wrap 규칙(위)보다 뒤에 있어야 이긴다. */
+@media (max-width: 640px) {
+  .chat-header {
+    flex-wrap: nowrap;
+  }
+}
+
+/* 낮은 화면(노트북 실효 ~650px, 창 분할): 셸 최소높이 680px 고정이 body 스크롤을 만들어
+   전송 버튼이 화면 밖으로 잘린다 → 해제. 입력창도 줄여 대화 가시 영역을 확보한다.
+   (JS resizePrompt가 computed min/max-height를 읽으므로 여기 값이 실제로 적용된다.) */
+@media (max-height: 700px) {
+  .shell {
+    min-height: 0;
+  }
+
+  .composer textarea {
+    min-height: 56px;
+    max-height: 30vh;
+  }
+}
+
+/* 좁은 폭(모바일·고배율 줌): 입력창 최소높이 축소로 컴포저가 대화 영역을 잠식하지 않게. */
+@media (max-width: 640px) {
+  .composer textarea {
+    min-height: 56px;
+    max-height: 40vh;
+  }
+}
+
+/* ── 대화 폴더 ─────────────────────────────────────────────────── */
+.folder-add-btn {
+  flex: none;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  color: var(--soft);
+}
+
+.folder-header.ungrouped {
+  padding: 8px 6px 3px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-toggle:hover {
+  color: var(--ink);
+}
+
+.folder-chevron {
+  flex: none;
+  font-size: 10px;
+  transition: transform 140ms ease;
+}
+
+.folder-header.collapsed .folder-chevron {
+  transform: rotate(-90deg);
+}
+
+.folder-name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 6%);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.folder-menu-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.folder-menu-btn:hover {
+  background: rgb(0 0 0 / 6%);
+  color: var(--ink);
+}
+
+/* 폴더 안 대화는 살짝 들여쓰기 + 좌측 가이드 라인 */
+.conversation-item.in-folder {
+  margin-left: 10px;
+  border-left: 2px solid var(--line);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+/* 팝오버 메뉴 내 구분 라벨(예: '폴더로 이동') */
+.popover-divider {
+  padding: 8px 12px 3px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }

@@ -1,0 +1,16 @@
+# 모델 목록 — 이 파일을 편집한 뒤 scripts/update-models.{sh,ps1,bat} 를 실행하면
+#   models.config.js 가 재생성되어 앱(브라우저)에 반영됩니다.
+#
+# 형식: label | endpoint | model | contextChars(선택)
+#   - '#' 로 시작하는 줄과 빈 줄은 무시합니다.
+#   - label 과 endpoint 는 필수, model 생략 시 label 을 사용, contextChars 생략 가능.
+#   - contextChars = 입력 문자 예산 ≈ (모델 컨텍스트 토큰 − 출력 예약 토큰) × ~2자/토큰.
+#   - 컨텍스트 길이를 모르면 contextChars 를 '비워 두세요'. 앱이 안전한 기본 예산을 쓰고,
+#     실행 후 화면의 '최대 맥락 문자 수' 에서 모델별로 바로 조정할 수 있습니다.
+#     (vLLM 등은 GET <엔드포인트 베이스>/models 응답의 max_model_len 으로 확인 가능)
+#
+# 예) 본인 환경의 OpenAI-compatible endpoint 로 바꾸세요:
+#   My Model | http://localhost:8000/v1/chat/completions | my-model-name | 32768
+
+Gemma4 31B | http://model.local/gemma4-31b/v1/chat/completions | gemma-4-31B-it | 65536
+Gemma4 26B | http://model.local/gemma4/v1/chat/completions | gemma-4-26B-it | 65536
